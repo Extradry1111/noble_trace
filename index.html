@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Noble Trace</title>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron&display=swap" rel="stylesheet">
+  <style>
+    body {
+      margin: 0;
+      font-family: 'Orbitron', sans-serif;
+      background-color: #050005;
+      color: #eee;
+      overflow: hidden;
+    }
+    #vanta-bg { position: fixed; top:0; left:0; width:100%; height:100%; z-index:-1; }
+    .container { padding:40px 20px; max-width:1000px; margin:auto; text-align:center; }
+    h1 { font-size:3rem; margin-bottom:20px; color: #d9b3ff; text-shadow:0 0 10px #b388eb; }
+    .glow { text-shadow: 0 0 8px #d9b3ff; color: #eee; }
+    .word-list { display:flex; flex-wrap:wrap; justify-content:center; gap:15px; margin-bottom:20px; }
+    .word { border:1px solid #d9b3ff; padding:5px 10px; border-radius:5px; font-size:1rem; color:#d9b3ff; }
+    .word.found { background:#d9b3ff; color:#050005; box-shadow:0 0 8px #d9b3ff; }
+    #grid { display:grid; justify-content:center; gap:4px; }
+    .cell { width:34px; height:34px; font-size:1.2rem; background:#111; border:1px solid #eee;
+      color:#eee; text-align:center; line-height:34px; cursor:pointer; transition:0.2s; }
+    .cell.selected { background:#d9b3ff; color:#050005; }
+    .cell.correct { background:#b388eb; color:#050005; box-shadow:0 0 8px #b388eb; }
+    .btn { margin:10px; padding:12px 25px; font-size:1.1rem; border:none; border-radius:30px;
+      background:#d9b3ff; color:#050005; cursor:pointer; transition:0.3s; }
+    .btn:hover { background:#b388eb; }
+    #timer, #score { margin-top:15px; font-size:1.2rem; color:#eee; text-shadow:0 0 6px #d9b3ff; }
+    #win-message { margin-top:25px; font-size:1.5rem; color:#d9b3ff; text-shadow:0 0 8px #d9b3ff; }
+  </style>
+</head>
+<body>
+  <div id="vanta-bg"></div>
+  <div class="container">
+    <h1>Noble Trace</h1>
+    <div id="start-screen">
+      <p class="glow">Choose difficulty:</p>
+      <button class="btn" onclick="startGame(5, 8)">Easy (5 Words)</button>
+      <button class="btn" onclick="startGame(8, 10)">Medium (8 Words)</button>
+      <button class="btn" onclick="startGame(12, 12)">Hard (12 Words)</button>
+    </div>
+    <div id="game" style="display:none;">
+      <div id="timer" class="glow">Time: 0s</div>
+      <div id="score" class="glow">Score: 0</div>
+      <div class="word-list" id="word-list"></div>
+      <div id="grid"></div>
+      <div id="win-message" class="glow"></div>
+      <button class="btn" id="reset-btn" style="display:none;" onclick="location.reload()">Play Again</button>
+    </div>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r121/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/vanta@latest/dist/vanta.net.min.js"></script>
+  <script>
+    VANTA.NET({
+      el: "#vanta-bg",
+      mouseControls: true, touchControls: true, gyroControls: false,
+      minHeight:200, minWidth:200, scale:1.0, scaleMobile:1.0,
+      color: 0xd9b3ff, backgroundColor: 0x050005
+    });
+  </script>
+
+  <script>
+    const allWords = [
+      "NOBLE", "STABLECOIN", "LIQUIDITY", "INTEROPERABILITY",
+      "COSMOS", "APPLAYER", "USDN", "USDC", "BLOCKCHAIN", "DAO", "PARADIGM", "IBC"
+    ];
+    let gridSize, words, grid=[], selectedCells=[], foundWords=[], timer=0, score=0;
+    let timerInterval;
+    const gridEl=document.getElementById("grid"),
+          wordListEl=document.getElementById("word-list"),
+          timerEl=document.getElementById("timer"),
+          scoreEl=document.getElementById("score"),
+          winMessageEl=document.getElementById("win-message");
+
+    function startGame(wordCount, size) {
+      gridSize=size;
+      words = shuffleArray(allWords).slice(0, wordCount);
+      document.getElementById("game").style.display="block";
+      document.getElementById("start-screen").style.display="none";
+      document.getElementById("reset-btn").style.display="none";
+      gridEl.style.gridTemplateColumns = `repeat(${gridSize},34px)`;
+      resetState();
+      generateGrid(); renderGrid(); renderWordList();
+      timerInterval = setInterval(() => {
+        timer++; timerEl.textContent=`Time: ${timer}s`;
+      },1000);
+    }
+
+    function resetState(){
+      foundWords=[]; selectedCells=[]; score=0; timer=0;
+      timerEl.textContent="Time: 0s"; scoreEl.textContent="Score: 0";
+      winMessageEl.textContent="";
+    }
+
+    function generateGrid(){
+      grid = Array(gridSize*gridSize).fill("");
+      words.forEach(w => placeWord(w));
+      for(let i=0;i<grid.length;i++){
+        if(!grid[i]) grid[i]= String.fromCharCode(65 + Math.floor(Math.random()*26));
+      }
+    }
+
+    function placeWord(word){
+      const directions = [[1,0],[0,1]]; // horizontal or vertical
+      word = word.toUpperCase();
+      let placed=false;
+      while(!placed){
+        const dir = directions[Math.floor(Math.random()*directions.length)];
+        const row = Math.floor(Math.random()*gridSize);
+        const col = Math.floor(Math.random()*gridSize);
+        let fits=true;
+        for(let i=0;i<word.length;i++){
+          const r=row+dir[1]*i, c=col+dir[0]*i;
+          if(r<0||r>=gridSize||c<0||c>=gridSize ||
+             (grid[r*gridSize+c] && grid[r*gridSize+c]!=word[i])){
+            fits=false; break;
+          }
+        }
+        if(!fits) continue;
+        for(let i=0;i<word.length;i++){
+          const r=row+dir[1]*i, c=col+dir[0]*i;
+          grid[r*gridSize+c]=word[i];
+        }
+        placed=true;
+      }
+    }
+
+    function renderGrid(){
+      gridEl.innerHTML="";
+      grid.forEach((letter,i)=>{
+        const cell=document.createElement("div");
+        cell.className="cell";
+        cell.textContent=letter;
+        cell.dataset.index=i;
+        cell.onclick=()=>toggleSelect(cell);
+        gridEl.appendChild(cell);
+      });
+    }
+
+    function renderWordList(){
+      wordListEl.innerHTML="";
+      words.forEach(w=>{
+        const d=document.createElement("div");
+        d.className="word"; d.textContent=w;
+        wordListEl.appendChild(d);
+      });
+    }
+
+    function toggleSelect(cell){
+      const idx=+cell.dataset.index;
+      if(cell.classList.contains("correct")) return;
+      if(selectedCells.includes(idx)){
+        selectedCells=selectedCells.filter(i=>i!==idx);
+        cell.classList.remove("selected");
+      } else {
+        selectedCells.push(idx);
+        cell.classList.add("selected");
+      }
+      checkSelection();
+    }
+
+    function checkSelection(){
+      const sel = selectedCells.map(i=>grid[i]).join("");
+      const rev = sel.split("").reverse().join("");
+      const match = words.find(w => w===sel || w===rev);
+      if(match && !foundWords.includes(match)){
+        foundWords.push(match);
+        selectedCells.forEach(i=>{
+          const c=gridEl.children[i];
+          c.classList.remove("selected"); c.classList.add("correct");
+        });
+        [...wordListEl.children].forEach(w=>{if(w.textContent===match) w.classList.add("found");});
+        score += match.length * 10;
+        scoreEl.textContent=`Score: ${score}`;
+        selectedCells=[];
+        checkWin();
+      }
+    }
+
+    function checkWin(){
+      if(foundWords.length===words.length){
+        clearInterval(timerInterval);
+        winMessageEl.textContent = `🎉 You found all ${words.length} words in ${timer}s with ${score} points!`;
+        document.getElementById("reset-btn").style.display="inline-block";
+      }
+    }
+
+    function shuffleArray(arr){ return arr.slice().sort(()=>Math.random()-0.5); }
+  </script>
+</body>
+</html>
