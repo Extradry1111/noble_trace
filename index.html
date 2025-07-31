@@ -20,13 +20,20 @@
     .word-list { display:flex; flex-wrap:wrap; justify-content:center; gap:15px; margin-bottom:20px; }
     .word { border:1px solid #d9b3ff; padding:5px 10px; border-radius:5px; font-size:1rem; color:#d9b3ff; }
     .word.found { background:#d9b3ff; color:#050005; box-shadow:0 0 8px #d9b3ff; }
-    #grid { display:grid; justify-content:center; gap:4px; }
-    .cell { width:34px; height:34px; font-size:1.2rem; background:#111; border:1px solid #eee;
-      color:#eee; text-align:center; line-height:34px; cursor:pointer; transition:0.2s; }
-    .cell.selected { background:#d9b3ff; color:#050005; }
-    .cell.correct { background:#b388eb; color:#050005; box-shadow:0 0 8px #b388eb; }
-    .btn { margin:10px; padding:12px 25px; font-size:1.1rem; border:none; border-radius:30px;
-      background:#d9b3ff; color:#050005; cursor:pointer; transition:0.3s; }
+    #grid { display:grid; justify-content:center; gap:5px; margin-bottom: 20px; }
+    .cell {
+      width: 40px; height: 40px; font-size: 1.3rem;
+      background: #111; border:1px solid #eee;
+      color: #eee; text-align: center; line-height: 40px;
+      cursor: pointer; transition: 0.2s;
+    }
+    .cell.selected { background: #d9b3ff; color: #050005; }
+    .cell.correct { background: #b388eb; color: #050005; box-shadow: 0 0 8px #b388eb; }
+    .btn {
+      margin:10px; padding:12px 25px; font-size:1.1rem;
+      border:none; border-radius:30px;
+      background:#d9b3ff; color:#050005; cursor:pointer; transition:0.3s;
+    }
     .btn:hover { background:#b388eb; }
     #timer, #score { margin-top:15px; font-size:1.2rem; color:#eee; text-shadow:0 0 6px #d9b3ff; }
     #win-message { margin-top:25px; font-size:1.5rem; color:#d9b3ff; text-shadow:0 0 8px #d9b3ff; }
@@ -49,6 +56,7 @@
       <div id="grid"></div>
       <div id="win-message" class="glow"></div>
       <button class="btn" id="reset-btn" style="display:none;" onclick="location.reload()">Play Again</button>
+      <button class="btn" onclick="goToMenu()">Back to Menu</button>
     </div>
   </div>
 
@@ -76,85 +84,108 @@
           scoreEl=document.getElementById("score"),
           winMessageEl=document.getElementById("win-message");
 
+    function goToMenu() {
+      clearInterval(timerInterval);
+      document.getElementById("game").style.display = "none";
+      document.getElementById("start-screen").style.display = "block";
+    }
+
     function startGame(wordCount, size) {
-      gridSize=size;
-      words = shuffleArray(allWords).slice(0, wordCount);
-      document.getElementById("game").style.display="block";
-      document.getElementById("start-screen").style.display="none";
-      document.getElementById("reset-btn").style.display="none";
-      gridEl.style.gridTemplateColumns = `repeat(${gridSize},34px)`;
+      gridSize = size;
+      words = shuffleArray(allWords).filter(w => w.length <= gridSize).slice(0, wordCount);
+      document.getElementById("game").style.display = "block";
+      document.getElementById("start-screen").style.display = "none";
+      document.getElementById("reset-btn").style.display = "none";
+      gridEl.style.gridTemplateColumns = `repeat(${gridSize}, 40px)`;
       resetState();
       generateGrid(); renderGrid(); renderWordList();
       timerInterval = setInterval(() => {
-        timer++; timerEl.textContent=`Time: ${timer}s`;
-      },1000);
+        timer++;
+        timerEl.textContent = `Time: ${timer}s`;
+      }, 1000);
     }
 
     function resetState(){
-      foundWords=[]; selectedCells=[]; score=0; timer=0;
-      timerEl.textContent="Time: 0s"; scoreEl.textContent="Score: 0";
-      winMessageEl.textContent="";
+      foundWords = []; selectedCells = []; score = 0; timer = 0;
+      timerEl.textContent = "Time: 0s"; scoreEl.textContent = "Score: 0";
+      winMessageEl.textContent = "";
     }
 
     function generateGrid(){
-      grid = Array(gridSize*gridSize).fill("");
+      grid = Array(gridSize * gridSize).fill("");
       words.forEach(w => placeWord(w));
-      for(let i=0;i<grid.length;i++){
-        if(!grid[i]) grid[i]= String.fromCharCode(65 + Math.floor(Math.random()*26));
+      for(let i = 0; i < grid.length; i++){
+        if(!grid[i]) grid[i] = String.fromCharCode(65 + Math.floor(Math.random() * 26));
       }
     }
 
     function placeWord(word){
-      const directions = [[1,0],[0,1]]; // horizontal or vertical
+      const directions = [[1,0],[0,1]]; // horizontal, vertical
       word = word.toUpperCase();
-      let placed=false;
-      while(!placed){
-        const dir = directions[Math.floor(Math.random()*directions.length)];
-        const row = Math.floor(Math.random()*gridSize);
-        const col = Math.floor(Math.random()*gridSize);
-        let fits=true;
-        for(let i=0;i<word.length;i++){
-          const r=row+dir[1]*i, c=col+dir[0]*i;
-          if(r<0||r>=gridSize||c<0||c>=gridSize ||
-             (grid[r*gridSize+c] && grid[r*gridSize+c]!=word[i])){
-            fits=false; break;
+      let placed = false;
+      let attempts = 0, maxAttempts = 100;
+
+      while(!placed && attempts < maxAttempts){
+        attempts++;
+        const dir = directions[Math.floor(Math.random() * directions.length)];
+        const row = Math.floor(Math.random() * (gridSize - (dir[1] ? word.length : 0)));
+        const col = Math.floor(Math.random() * (gridSize - (dir[0] ? word.length : 0)));
+
+        let fits = true;
+        for(let i = 0; i < word.length; i++){
+          const r = row + dir[1] * i;
+          const c = col + dir[0] * i;
+          const index = r * gridSize + c;
+
+          if(grid[index] && grid[index] !== word[i]){
+            fits = false;
+            break;
           }
         }
+
         if(!fits) continue;
-        for(let i=0;i<word.length;i++){
-          const r=row+dir[1]*i, c=col+dir[0]*i;
-          grid[r*gridSize+c]=word[i];
+
+        for(let i = 0; i < word.length; i++){
+          const r = row + dir[1] * i;
+          const c = col + dir[0] * i;
+          const index = r * gridSize + c;
+          grid[index] = word[i];
         }
-        placed=true;
+
+        placed = true;
+      }
+
+      if (!placed) {
+        console.warn(`⚠️ Could not place word: ${word}`);
       }
     }
 
     function renderGrid(){
-      gridEl.innerHTML="";
-      grid.forEach((letter,i)=>{
-        const cell=document.createElement("div");
-        cell.className="cell";
-        cell.textContent=letter;
-        cell.dataset.index=i;
-        cell.onclick=()=>toggleSelect(cell);
+      gridEl.innerHTML = "";
+      grid.forEach((letter, i) => {
+        const cell = document.createElement("div");
+        cell.className = "cell";
+        cell.textContent = letter;
+        cell.dataset.index = i;
+        cell.onclick = () => toggleSelect(cell);
         gridEl.appendChild(cell);
       });
     }
 
     function renderWordList(){
-      wordListEl.innerHTML="";
-      words.forEach(w=>{
-        const d=document.createElement("div");
-        d.className="word"; d.textContent=w;
+      wordListEl.innerHTML = "";
+      words.forEach(w => {
+        const d = document.createElement("div");
+        d.className = "word"; d.textContent = w;
         wordListEl.appendChild(d);
       });
     }
 
     function toggleSelect(cell){
-      const idx=+cell.dataset.index;
+      const idx = +cell.dataset.index;
       if(cell.classList.contains("correct")) return;
       if(selectedCells.includes(idx)){
-        selectedCells=selectedCells.filter(i=>i!==idx);
+        selectedCells = selectedCells.filter(i => i !== idx);
         cell.classList.remove("selected");
       } else {
         selectedCells.push(idx);
@@ -164,32 +195,37 @@
     }
 
     function checkSelection(){
-      const sel = selectedCells.map(i=>grid[i]).join("");
+      const sel = selectedCells.map(i => grid[i]).join("");
       const rev = sel.split("").reverse().join("");
-      const match = words.find(w => w===sel || w===rev);
+      const match = words.find(w => w === sel || w === rev);
       if(match && !foundWords.includes(match)){
         foundWords.push(match);
-        selectedCells.forEach(i=>{
-          const c=gridEl.children[i];
-          c.classList.remove("selected"); c.classList.add("correct");
+        selectedCells.forEach(i => {
+          const c = gridEl.children[i];
+          c.classList.remove("selected");
+          c.classList.add("correct");
         });
-        [...wordListEl.children].forEach(w=>{if(w.textContent===match) w.classList.add("found");});
+        [...wordListEl.children].forEach(w => {
+          if(w.textContent === match) w.classList.add("found");
+        });
         score += match.length * 10;
-        scoreEl.textContent=`Score: ${score}`;
-        selectedCells=[];
+        scoreEl.textContent = `Score: ${score}`;
+        selectedCells = [];
         checkWin();
       }
     }
 
     function checkWin(){
-      if(foundWords.length===words.length){
+      if(foundWords.length === words.length){
         clearInterval(timerInterval);
         winMessageEl.textContent = `🎉 You found all ${words.length} words in ${timer}s with ${score} points!`;
-        document.getElementById("reset-btn").style.display="inline-block";
+        document.getElementById("reset-btn").style.display = "inline-block";
       }
     }
 
-    function shuffleArray(arr){ return arr.slice().sort(()=>Math.random()-0.5); }
+    function shuffleArray(arr){
+      return arr.slice().sort(() => Math.random() - 0.5);
+    }
   </script>
 </body>
 </html>
